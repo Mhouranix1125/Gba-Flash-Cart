@@ -1,120 +1,156 @@
-# GBA游戏卡是怎么运作的?
+# How Does a GBA Game Cartridge Work?
 
-## 前言
+## Introduction
 
-## 一、游戏卡的结构
+This document explains how the Game Boy Advance talks to a cartridge, and why a flashcart like
+ChisFlash needs a small logic chip (a CPLD) to make ordinary memory chips work in a GBA.
 
-### 卡槽总线 - 定义
+## 1. Cartridge Structure
 
-32Pin(1.5mm)的卡槽总线定义如下:
+### Cartridge Bus: Pinout
 
-| 引脚 | 名称     | 方向 | 说明                                                         |
-|------|----------|------|------------------------------------------------------------|
-| 1    | VDD      | O    | 电源 3.3V DC                                                 |
-| 2    | PHI      | O    | 系统时钟（可选无、4.19MHz、8.38MHz、16.78MHz）             |
-| 3    | /WR      | O    | 写选择；锁存的地址将在/RD，或/WR信号的上升沿递增           |
-| 4    | /RD      | O    | 读选择；或/WR信号的上升沿递增                               |
-| 5    | /CS      | O    | ROM芯片选择；地址 A0..A15 将在下降沿被锁存                 |
-| 6-21 | AD0-15   | I/O  | 低位16位地址 和/或 16位ROM数据（见下文）                   |
-| 22-29| A16-23   | I/O  | 高位8位ROM地址 或 8位SRAM数据（见下文）                   |
-| 30   | /CS2     | O    | SRAM芯片选择                                                 |
-| 31   | /REQ     | I    | 中断请求 (/IREQ) 或 DMA请求 (/DREQ)                         |
-| 32   | GND      | O    | 地 0V                                                        |
+The cartridge slot has 32 pins with 1.5 mm spacing. Directions are from the GBA's point of view
+(O = the GBA drives the pin, I = the cartridge drives it).
 
-当访问游戏卡SRAM时，16位地址通过AD0-AD15输出，然后8位数据通过A16-A23传输。
+| Pin   | Name    | Direction | Description |
+|-------|---------|-----------|-------------|
+| 1     | VDD     | O   | Power, 3.3V DC |
+| 2     | PHI     | O   | System clock (selectable: off, 4.19MHz, 8.38MHz, or 16.78MHz) |
+| 3     | /WR     | O   | Write strobe. The latched address increments on each rising edge of /RD or /WR |
+| 4     | /RD     | O   | Read strobe. The latched address increments on each rising edge of /RD or /WR |
+| 5     | /CS     | O   | ROM chip select. Address bits A0-A15 are latched on its falling edge |
+| 6-21  | AD0-15  | I/O | Low 16 address bits and/or 16-bit ROM data (see below) |
+| 22-29 | A16-23  | I/O | High 8 ROM address bits, or 8-bit SRAM data (see below) |
+| 30    | /CS2    | O   | SRAM (save chip) select |
+| 31    | /REQ    | I   | Interrupt request (/IREQ) or DMA request (/DREQ) |
+| 32    | GND     | O   | Ground, 0V |
 
-当访问游戏卡ROM时，24位地址通过AD0-AD15和A16-A23输出，然后16位数据通过AD0-AD15传输。
+A slash in front of a name (for example /CS) means the signal is **active low**: it does its job when
+pulled to 0V.
 
-24位地址由实际的25位内存地址（字节步进）除以二（半字步进）形成。
+When the GBA accesses **SRAM**, it puts a 16-bit address on AD0-AD15 and moves 8-bit data over A16-A23.
 
-要点概括:
-- AD0-AD15 低16位地址
-    - 在WR或者RD信号上升沿递增
-- ROM读写
-    - 通过CS使能ROM芯片, 通过AD0-AD15和A16-A23传输地址, 通过AD0-AD15传输数据
-    - AD0-AD15同时用于ROM地址和数据传输, 所以CS下降沿时, 地址会被游戏卡锁存, 以便数据传输
-    - 锁存的地址 + A16-A23 组成24位地址, 24位地址用于ROM, 每个地址对应16bit, 一共有256Mbit的地址空间
-- RAM读写
-    - 通过CS2使能SRAM芯片, 通过AD0-AD15传输地址, 通过A16-A23传输数据
-    - 16位地址直接用于SRAM(RAM读写不需要锁存), 每个地址对应8bit, 一共有512Kbit的地址空间 (Bank Switching我们后面再讨论)
+When the GBA accesses **ROM**, it puts a 24-bit address on AD0-AD15 plus A16-A23, then moves 16-bit
+data over AD0-AD15.
 
-#### 卡槽总线 - 时序
+The 24-bit ROM address is the real 25-bit memory address (counted in bytes) divided by two (counted in
+16-bit halfwords).
 
-通过卡带读写数据的时序如下:
+Key points:
 
-| 区域       | 总线  | 读取   | 写入   | 周期数     |
-|------------|-------|--------|--------|----------|
-| 游戏卡Flash | 16位  | 8/16/32位 | 16/32位 | 5/5/8 \*\*/\*\*\* |
-| 游戏卡ROM   | 16位  | 8/16/32位 | N/A     | 5/5/8 \*\*/\*\*\* |
-| 游戏卡SRAM   | 8位   | 8位    | 8位    | 5 \*\*   |
+- AD0-AD15 carry the low 16 address bits.
+    - The cartridge increments this address on every rising edge of /WR or /RD.
+- ROM reads and writes
+    - /CS enables the ROM chip. The address arrives on AD0-AD15 and A16-A23, and data moves over AD0-AD15.
+    - AD0-AD15 carry both the ROM address and the data, so the cartridge must **latch** (capture and
+      hold) the address when /CS falls. That frees the same pins for data.
+    - The latched 16 bits plus A16-A23 form a 24-bit address. Each address holds 16 bits of data, giving
+      256Mbit (32MB) of address space.
+- RAM reads and writes
+    - /CS2 enables the SRAM chip. The address arrives on AD0-AD15 and data moves over A16-A23.
+    - The 16-bit address goes straight to the SRAM, with no latching needed. Each address holds 8 bits,
+      giving 512Kbit (64KB) of address space. Bank switching, covered later, extends this.
 
-注意事项：
+### Cartridge Bus: Timing
+
+Read/write timing for cartridge memory:
+
+| Region          | Bus width | Read         | Write    | Cycles |
+|-----------------|-----------|--------------|----------|--------|
+| Cartridge Flash | 16-bit    | 8/16/32-bit  | 16/32-bit | 5/5/8 \*\*/\*\*\* |
+| Cartridge ROM   | 16-bit    | 8/16/32-bit  | N/A      | 5/5/8 \*\*/\*\*\* |
+| Cartridge SRAM  | 8-bit     | 8-bit        | 8-bit    | 5 \*\* |
+
+Notes:
 ```
-  *   如果GBA在访问视频内存的同时访问，则额外增加1个周期。
-  **  默认等待状态设置，请参阅系统控制章节。
-  *** 顺序访问和非顺序访问的单独定时。
-  一个周期大约等于59.59ns（即16.78MHz的时钟）。
+  *   Add 1 cycle if the GBA accesses video memory at the same time.
+  **  Default wait-state settings. See the System Control chapter of GBATEK.
+  *** Sequential and non-sequential accesses are timed separately.
+  One cycle is about 59.59ns (a 16.78MHz clock).
 ```
 
-#### 卡槽总线 - 总结
+#### Cartridge Bus: Summary
 
-显然并没有一款量产型片能直接满足卡槽读写协议。
+No mass-produced memory chip speaks this cartridge protocol directly.
 
-考虑到时序要求以及功耗要求，我们可以通过CPLD/FPGA来实现这个逻辑电路。
+Given the timing and power requirements, a CPLD/FPGA is a good way to build the glue logic in between.
+It needs to:
 
-- 地址锁存、自增
-- 把拼接的24位地址传递给ROM芯片
-- 实现Flash ROM的存档备份以及Bank Switching(1Mbit存档)
-- 实现FRAM的1Mbit存档备份, 通过识别Flash ROM Bank Switching命令来实现
-- 其他高级功能，比如振动反馈、实时时钟等
+- Latch the address and auto-increment it
+- Pass the combined 24-bit address to the ROM chip
+- Implement Flash ROM save backup, including bank switching for 1Mbit saves
+- Implement 1Mbit FRAM saves by recognizing the Flash bank-switch command
+- Handle other advanced features, such as rumble and a real-time clock
 
-### ROM芯片
+### ROM Chip
 
-ROM芯片内存储了GBA游戏的程序和数据，由于上述的限制，ROM芯片的容量最大为256Mbit。
+The ROM chip stores the game's program and data. Because of the bus limits above, it can be at most
+256Mbit (32MB).
 
-存储ROM的芯片一般选择Parallel NOR Flash，方便开发，但成本较高。
+Flashcarts usually use parallel NOR flash for the ROM. It's easy to work with but relatively expensive.
 
-### SRAM芯片
+### SRAM Chip
 
-SRAM芯片内存储了游戏的存档数据，由于上述的限制，SRAM芯片的容量最大为512Kbit。
+The SRAM chip stores save data. Because of the bus limits above, it can be at most 512Kbit (64KB).
 
-特殊的是，一些GBA游戏使用了Bank Switching技术，这种技术可以让游戏卡的SRAM容量扩展到1Mbit。
+Some GBA games use **bank switching**, which lets the cartridge expose 1Mbit (128KB) of save memory
+through the same 64KB window, one half at a time.
 
-p.s. 高端的游戏卡会使用FRAM芯片代替SRAM，来确保断电数据不丢失。
+Note: higher-end flashcarts use FRAM instead of battery-backed SRAM so the save survives without power.
 
-## 二、地址映射
+## 2. Address Map
 
-### 地址映射
+### Address Map
 
-| 地址范围    | 功能       | 大小     | 说明 |
-|------------|-----------|---------|------|
-| 08000000-09FFFFFF | ROM/FlashROM | 32MB | ROM/FlashROM的地址空间(等待状态0) |
-| 0A000000-0BFFFFFF | ROM/FlashROM | 32MB | ROM/FlashROM的地址空间(等待状态1) |
-| 0C000000-0DFFFFFF | ROM/FlashROM | 32MB | ROM/FlashROM的地址空间(等待状态2) |
-| 0E000000-0E00FFFF | SRAM        | 64KB | SRAM的地址空间(8位总线) |
-| 0E010000-0FFFFFFF | 未使用      | 未知  | 未使用的地址空间 |
+| Address range     | Function     | Size    | Description |
+|-------------------|--------------|---------|-------------|
+| 08000000-09FFFFFF | ROM/FlashROM | 32MB    | ROM/FlashROM address space (wait state 0) |
+| 0A000000-0BFFFFFF | ROM/FlashROM | 32MB    | ROM/FlashROM address space (wait state 1) |
+| 0C000000-0DFFFFFF | ROM/FlashROM | 32MB    | ROM/FlashROM address space (wait state 2) |
+| 0E000000-0E00FFFF | SRAM         | 64KB    | SRAM address space (8-bit bus) |
+| 0E010000-0FFFFFFF | Unused       | Unknown | Unused address space |
 
+The three ROM regions are mirrors of the same 32MB. They differ only in how many wait states the GBA
+inserts per access.
 
-### 一些特殊操作
-
+### Special Operations
 
 #### Flash ROM Bank Switching
+
+Games with 1Mbit Flash saves pick which 64KB half is visible by sending this command sequence:
 
 ```
   [E005555h]=AAh, [E002AAAh]=55h, [E005555h]=B0h  (select bank command)
   [E000000h]=bnk                                  (write bank number 0..1)
 ```
 
-## 三、特殊通讯
+The first two writes are an "unlock" sequence that every Flash command starts with. B0h is the
+bank-select command, and the next write gives the bank number.
 
-除了ROM和SRAM芯片，一些特殊的外设和功能也会通过卡槽总线进行通讯，后续再完善这部分。
+## 3. Special Communication
 
-### 实时时钟
-### 振动反馈
-### 太阳传感器
-### 其他
+Besides the ROM and SRAM chips, some special peripherals also talk to the GBA over the cartridge bus.
+This section will be expanded later.
 
-GBA游戏卡还有一些外设，比如实时时钟、振动反馈、太阳传感器等。
+### Real-Time Clock
 
+Pokémon Ruby/Sapphire/Emerald and a few other games use a Seiko S-3511 real-time clock. The game talks
+to it through a 3-pin "GPIO" port mapped into ROM space:
 
-- 参考文献: [GBATEK](http://problemkaputt.de/gbatek.htm)
+| GBA address | Register | Purpose |
+|-------------|----------|---------|
+| 080000C4h   | Data     | Bit 0 = SCK (clock), bit 1 = SIO (data), bit 2 = CS (chip select) |
+| 080000C6h   | Direction | 1 = pin is an output from the GBA, 0 = input |
+| 080000C8h   | Control  | Bit 0 = 1 makes the port readable. When 0, reads return normal ROM data |
+
+The game bit-bangs a serial protocol over these pins to read and set the date and time. The clock
+values are stored in BCD. See GBATEK, section "GBA Cart Real-Time Clock (RTC)", for the full protocol.
+
+### Rumble
+### Solar Sensor
+### Other
+
+GBA cartridges can also include other peripherals, such as a real-time clock, rumble motor, or solar
+sensor.
+
+- Reference: [GBATEK](http://problemkaputt.de/gbatek.htm)

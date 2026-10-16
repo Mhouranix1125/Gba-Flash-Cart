@@ -11,10 +11,18 @@
 | 7 | 10uF | C3 | C0603 | 1 | CL10A106MA8NRNC | SAMSUNG |  | C96446 |
 | 8 | EPM240T100C5N | U5 | TQFP-100_L14.0-W14.0-P0.50-LS16.0-BL | 1 | EPM240T100C5N | Intel/Altera |  | C10041 |
 
+What each part does:
+
+- **U2, S29GL256S10TFI010**: 256Mbit parallel NOR flash that holds the game ROM.
+- **U4, FM28V100-TG**: 1Mbit FRAM that holds the save file. It keeps data without a battery.
+- **U5, EPM240T100C5N**: MAX II CPLD, the "mapper" logic between the GBA bus and the memory chips.
+- **LED1, LED2**: blue and green activity LEDs. **R1** is their current-limiting resistor.
+- **C1-C3**: power-supply decoupling capacitors.
+
 # ChisFlash V0.1 BOM
 
-- 替换FM28V100-TG为IS62LV1024LL-55H 
-- Replace FM28V100-TG with IS62LV1024LL-55H
-- 额外的2个10kΩ电阻，1个100kΩ电阻，2个1N4148WS二极管，1个1616电池
-- Additional 2 10kΩ resistors, 1 100kΩ resistor, 2 1N4148WS diodes, 1 1616 battery
+Same as V1.0, with these changes:
 
+- Replace FM28V100-TG with IS62LV1024LL-55H (1Mbit SRAM).
+- Add two 10kΩ resistors, one 100kΩ resistor, two 1N4148WS diodes, and one 1616 coin cell battery.
+  These form the battery backup that keeps the SRAM save alive while the cart is unpowered.

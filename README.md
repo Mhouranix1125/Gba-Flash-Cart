@@ -1,29 +1,52 @@
-
 # ChisFlash
 
+An open-source Game Boy Advance flashcart (a reprogrammable GBA cartridge).
+
 - [Discord](https://discord.gg/Hq8PSSpnEM)
-- [English](README-en.md)
+- Original project by ChisBread, inspired by [opencartgba](https://github.com/laqieer/opencartgba).
+- Latest PCB releases are published on OSHWHub: [ChisBread](https://oshwhub.com/eda_lmizqtvvk/works)
 
-- ChisFlash是开源GBA烧录卡，它的灵感来自[opencartgba](https://github.com/laqieer/opencartgba)项目。
-- 立创开源项目地址（最新版本PCB在此发布）：[ChisBread](https://oshwhub.com/eda_lmizqtvvk/works)
-- v1.0(Prometheus)版本适用FRAM，v0.1版本适用SRAM (1Mbit)。
+New here? Start with the [Project Overview](document/0-project-overview.md). It explains how the
+pieces fit together in plain terms.
 
-# 功能特性
+## How it works in one paragraph
 
-- ChisFlash的开发目标是实现一个功能齐全的GBA烧录卡
+A GBA cartridge has two main chips: a **ROM** that holds the game and a **save chip** that holds your
+save file. The GBA talks to them over a 32-pin bus that shares pins between addresses and data, which
+no off-the-shelf memory chip understands directly. ChisFlash puts a small programmable logic chip (a
+**CPLD**, Altera MAX II EPM240) between the GBA and the memory. The CPLD latches and counts addresses
+for a 256Mbit NOR flash chip (the "ROM") and handles save-chip bank switching, so games with 1Mbit
+saves work.
 
-| 特性 | 状态 |
+## Board versions
+
+| Board | Version | Save chip | Firmware folder | PCB + BOM |
+| --- | --- | --- | --- | --- |
+| Pichu ("Lite Edition") | v0.1 | 1Mbit SRAM (IS62LV1024), battery-backed | [firmware/QuartusII1MSRAM](firmware/QuartusII1MSRAM) | [oshwhub](https://oshwhub.com/chisbread/chisflash-pichu) |
+| Prometheus | v1.0 | 1Mbit FRAM (FM28V100), no battery needed | [firmware/QuartusII1MFRAM](firmware/QuartusII1MFRAM) | [oshwhub](https://oshwhub.com/chisbread/chisflash-prometheus) |
+| Celebi | v1.1 | 1Mbit Flash (SST39VF010); also supports 512Kbit Flash | [firmware/QuartusII1MFlash](firmware/QuartusII1MFlash) | [oshwhub](https://oshwhub.com/chisbread/chisflash-celebi) |
+
+For 512Kbit Flash games on Celebi, see the [512Kbit ROM patch](https://github.com/ChisBread/gba-auto-batteryless-patcher/tree/custom_flashid).
+
+The Celebi PCB also has an **S-3511A real-time clock chip**, a 32.768 kHz crystal, and a CR2032 battery
+holder. The firmware does not drive the clock yet (see Features below).
+
+## Features
+
+The goal is a fully featured GBA flashcart.
+
+| Feature | Status |
 | --- | --- |
-| 256Mbit闪存 | ✅ |
-| 512Kbit SRAM/FRAM | ✅ |
-| 1Mbit SRAM/FRAM（Bank Switching） | ✅ |
-| 1Mbit/512Kbit Flash（Bank Switching） | ✅ |
-| 实时时钟（RTC） | × |
-| 振动反馈 | × |
-| 陀螺仪 | x |
-| 太阳传感器 | × |
+| 256Mbit (32MB) game ROM | ✅ |
+| 512Kbit SRAM/FRAM saves | ✅ |
+| 1Mbit SRAM/FRAM saves (bank switching) | ✅ |
+| 1Mbit/512Kbit Flash saves (bank switching) | ✅ |
+| Real-time clock (RTC) | ❌ (hardware present on Celebi, firmware not written) |
+| Rumble | ❌ |
+| Gyro sensor | ❌ |
+| Solar sensor | ❌ |
 
-# 效果图
+## Images
 
 ![realcart](./images/realcart.png)
 ![top_v1.0](./images/top_v1.0.png)
@@ -31,32 +54,28 @@
 ![top_v0.1](./images/top_v0.1.png)
 ![but_v0.1](./images/but_v0.1.png)
 
-# 原理图
+## Schematic
 
 ![schematic](./images/sch.png)
 
-# BOM
+## Bill of materials
 
 - [ChisFlash BOM](BOM.md)
 
-# 目录结构   
+## Repository layout
 
 ```
 ChisFlash
-├── README.md
-├── LICENSE
-├── hardware
-├── firmware
-│   └── QuartusII1MSRAM
-│   └── QuartusII1MFRAM
-│   └── QuartusII1MFlash
-├── document-zh
+├── README.md          This file
+├── BOM.md             Parts list
+├── LICENSE.txt        GPL-3.0
+├── document/          Technical documentation
+│   ├── 0-project-overview.md
+│   └── 1-how-does-the-gba-cart-work.md
+├── firmware/          CPLD firmware (Quartus II 13.0 SP1 projects, VHDL)
+│   ├── QuartusII1MSRAM/   Pichu v0.1, 1Mbit SRAM
+│   ├── QuartusII1MFRAM/   Prometheus v1.0, 1Mbit FRAM
+│   └── QuartusII1MFlash/  Celebi v1.1, 1Mbit/512Kbit Flash (+ RTC hardware)
+├── hardware/          PCB design files (EasyEDA Pro .epro projects)
+└── images/            Photos and renders
 ```
-
-#### 补充说明
-
-- ChisFlash/hardware PCB设计文件
-- ChisFlash/firmware/QuartusII1MSRAM 固件目录 (适配1M SRAM) [PCB,BOM](https://oshwhub.com/chisbread/chisflash-pichu)
-- ChisFlash/firmware/QuartusII1MFRAM 固件目录 (适配1M FRAM) [PCB,BOM](https://oshwhub.com/chisbread/chisflash-prometheus)
-- ChisFlash/firmware/QuartusII1MFlash 固件目录 (适配1M Flash, 同时支持 512Kbit Flash) [PCB,BOM](https://oshwhub.com/chisbread/chisflash-celebi) [512Kbit ROM patch](https://github.com/ChisBread/gba-auto-batteryless-patcher/tree/custom_flashid)
-- ChisFlash/document是ChisFlash的中文技术文档
